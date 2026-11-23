@@ -64,40 +64,9 @@ app.get('/vibes', async (req, res) => {
   }
 });
 
-// 3. PUT: Edit vibe (and optional fields) by email
-app.put('/vibes/:email', async (req, res) => {
-  const { email } = req.params;
-  const { username, avatar, type, vibe } = req.body;
-
-  if (!vibe) {
-    return res.status(400).json({ error: 'Updated vibe content is required.' });
-  }
-
-  try {
-    const result = await pool.query(
-      `UPDATE vibes
-       SET vibe = $1,
-           username = COALESCE($2, username),
-           avatar = COALESCE($3, avatar),
-           type = COALESCE($4, type)
-       WHERE email = $5
-       RETURNING *`,
-      [vibe, username, avatar, type, email]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'No vibe found for this email.' });
-    }
-
-    res.status(200).json(result.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Failed to update vibe.' });
-  }
-});
 
 // 4. DELETE: Delete vibe by email
-app.delete('/vibes/:email', async (req, res) => {
+app.delete('/vibes-all/:email', async (req, res) => {
   const { email } = req.params;
 
   try {
@@ -119,6 +88,69 @@ app.delete('/vibes/:email', async (req, res) => {
   }
 });
 
+// 3. PUT: Edit only vibe text by email + vibeId
+app.put('/vibes/:email/:vibeId', async (req, res) => {
+  const { email, vibeId } = req.params;
+  const { vibe } = req.body;
+
+  if (!isValidUUID(vibeId)) {
+    return res.status(400).json({ error: 'Invalid vibeId format.' });
+  }
+
+  if (!vibe) {
+    return res.status(400).json({ error: 'Updated vibe content is required.' });
+  }
+
+  try {
+    const result = await pool.query(
+      `UPDATE vibes
+       SET vibe = $1
+       WHERE email = $2 AND id = $3
+       RETURNING *`,
+      [vibe, email, vibeId]
+    );
+
+    if (result.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ error: 'No vibe found for this email and vibeId.' });
+    }
+
+    res.status(200).json(result.rows[0]);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to update vibe.' });
+  }
+});
+
+// 4. DELETE: Delete vibe by email + vibeId
+app.delete('/vibes/:email/:vibeId', async (req, res) => {
+  const { email, vibeId } = req.params;
+
+  if (!isValidUUID(vibeId)) {
+    return res.status(400).json({ error: 'Invalid vibeId format.' });
+  }
+
+  try {
+    const result = await pool.query(
+      'DELETE FROM vibes WHERE email = $1 AND id = $2 RETURNING *',
+      [email, vibeId]
+    );
+
+    if (result.rows.length === 0) {
+      return res
+        .status(404)
+        .json({ error: 'No vibe found for this email and vibeId.' });
+    }
+
+    res
+      .status(200)
+      .json({ message: 'Vibe deleted successfully.', deleted: result.rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to delete vibe.' });
+  }
+});
 app.listen(PORT, () => {
   console.log(`Vibe server running on port ${PORT}`);
 });
